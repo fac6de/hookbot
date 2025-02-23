@@ -5,17 +5,14 @@ from discord.ext import commands
 import random
 import asyncio
 
-# Load environment variables from .env file.
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = os.getenv("OWNER_ID")  # Replace with your Discord user ID
+OWNER_ID = 1325226119624130701
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# Active boxing matches keyed by user ID.
 active_matches = {}
-# Async locks for each user to prevent race conditions.
 user_locks = {}
 
 def get_user_lock(user_id: int) -> asyncio.Lock:
@@ -23,7 +20,6 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
-# ------------- Boxing Match Logic -------------
 class BoxingMatch:
     def __init__(self, player: discord.Member):
         self.player = player
