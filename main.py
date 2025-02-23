@@ -8,7 +8,7 @@ import asyncio
 # Load environment variables from .env file.
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = 1343273279464669275  # Replace with your Discord user ID
+OWNER_ID = os.getenv("OWNER_ID")  # Replace with your Discord user ID
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
