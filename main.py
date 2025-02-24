@@ -11,25 +11,21 @@ import asyncio
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Only this user ID can execute commands.
+# Only this user ID can execute /listservers.
 OWNER_ID = 526064554820501506
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ---------------------------------------------
-# 1. Create a check function to allow only OWNER_ID.
-# ---------------------------------------------
+# -----------------------------
+# Check function for /listservers only
+# -----------------------------
 def owner_only(interaction: discord.Interaction) -> bool:
     if interaction.user.id != OWNER_ID:
-        # Raising CheckFailure stops command execution
-        # and triggers the error handler if present.
         raise app_commands.CheckFailure("You are not authorized to use this command.")
     return True
 
-# Active boxing matches keyed by user ID.
 active_matches = {}
-# Async locks for each user to prevent race conditions.
 user_locks = {}
 
 def get_user_lock(user_id: int) -> asyncio.Lock:
@@ -47,7 +43,7 @@ class BoxingMatch:
         self.round = 1
         self.defending = False
         self.last_commentary = "Fight started! Choose your move below."
-        # Track last uppercut time to prevent spamming.
+        # Simple anti-spam cooldown for uppercut
         self.last_uppercut_time = 0
 
     def health_bar(self, current: int, total: int) -> str:
@@ -81,8 +77,8 @@ class BoxingMatch:
           - jab:      Very high accuracy, light damage (8–12)
           - cross:    High accuracy, moderate damage (10–16)
           - hook:     Moderate accuracy, higher damage (12–20)
-          - uppercut: Lower accuracy, heavy damage (18–28) with a 3-second cooldown
-        Returns (move, damage, result) where result is "hit", "miss", "cooldown", or "invalid"
+          - uppercut: Lower accuracy, heavy damage (18–28), 3s cooldown
+        Returns (move, damage, result): result in {"hit", "miss", "cooldown", "invalid"}
         """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
@@ -93,18 +89,15 @@ class BoxingMatch:
         if move not in moves:
             return (move, 0, "invalid")
 
-        # Uppercut cooldown
         if move == "uppercut":
             current_time = time.time()
             if current_time - self.last_uppercut_time < 3:
                 return (move, 0, "cooldown")
             self.last_uppercut_time = current_time
 
-        # Accuracy check
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
 
-        # Calculate damage
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -115,9 +108,9 @@ class BoxingMatch:
 
     def bot_turn(self):
         """
-        Bot randomly attacks with: jab, cross, or hook.
-        If the player defended, damage is halved.
-        Returns (move, damage, result)
+        Bot randomly attacks with jab, cross, or hook.
+        If player defended, damage is halved.
+        Returns (move, damage, result).
         """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
@@ -148,6 +141,7 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
+        # If match ended, switch to PostMatchView.
         if not self.match.in_progress:
             view = PostMatchView(self.match, self.lock)
         else:
@@ -184,7 +178,7 @@ class FightView(discord.ui.View):
                 await self.update_message(interaction)
                 return
 
-            # Check bot HP
+            # Check if bot is defeated.
             if self.match.bot_hp <= 0:
                 commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
@@ -193,14 +187,14 @@ class FightView(discord.ui.View):
                 await self.update_message(interaction)
                 return
 
-            # Bot’s turn
+            # Bot's turn
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
                 commentary += f"\nThe bot tried a **{bot_move}** but missed!"
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
 
-            # Check player HP
+            # Check if player is defeated.
             if self.match.player_hp <= 0:
                 commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
@@ -267,12 +261,12 @@ class PostMatchView(discord.ui.View):
             view=None
         )
 
-# ---------------------------------------------
-# 2. Decorate each slash command with the owner_only check.
-# ---------------------------------------------
+# -------------------------
+# Slash Commands
+# -------------------------
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
-@app_commands.check(owner_only)
 async def startfight(interaction: discord.Interaction):
+    """Publicly available. Anyone can use this command."""
     user = interaction.user
     lock = get_user_lock(user.id)
     async with lock:
@@ -286,9 +280,12 @@ async def startfight(interaction: discord.Interaction):
         await interaction.response.send_message(embed=embed, view=view)
 
 
-@bot.tree.command(name="setactivity", description="Set the bot's activity status (Owner only)")
-@app_commands.check(owner_only)
+@bot.tree.command(name="setactivity", description="Set the bot's activity status.")
 async def setactivity(interaction: discord.Interaction, status: str):
+    """
+    Public command. Anyone can change the bot's activity.
+    If you want this restricted, add @app_commands.check(owner_only).
+    """
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
 
@@ -303,13 +300,12 @@ async def listservers(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-# ---------------------------------------------
-# 3. Error Handling
-# ---------------------------------------------
+# -------------------------
+# Error Handling
+# -------------------------
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
     if isinstance(error, discord.app_commands.CheckFailure):
-        # The user wasn't the owner or didn't pass the check
         try:
             await interaction.response.send_message(str(error), ephemeral=True)
         except discord.InteractionResponded:
@@ -321,9 +317,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
             pass
 
 
-# ---------------------------------------------
-# 4. Bot Startup
-# ---------------------------------------------
+# -------------------------
+# Bot Startup
+# -------------------------
 @bot.event
 async def on_ready():
     try:
