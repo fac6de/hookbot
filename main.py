@@ -77,8 +77,8 @@ class BoxingMatch:
           - jab:      Very high accuracy, light damage (8–12)
           - cross:    High accuracy, moderate damage (10–16)
           - hook:     Moderate accuracy, higher damage (12–20)
-          - uppercut: Lower accuracy, heavy damage (18–28), 3s cooldown
-        Returns (move, damage, result): result in {"hit", "miss", "cooldown", "invalid"}
+          - uppercut: Lower accuracy, heavy damage (18–28) with a 3-second cooldown.
+        Returns (move, damage, result) where result is "hit", "miss", "cooldown", or "invalid"
         """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
@@ -108,9 +108,9 @@ class BoxingMatch:
 
     def bot_turn(self):
         """
-        Bot randomly attacks with jab, cross, or hook.
-        If player defended, damage is halved.
-        Returns (move, damage, result).
+        Bot randomly attacks with: jab, cross, or hook.
+        If the player defended, damage is halved.
+        Returns (move, damage, result)
         """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
@@ -141,7 +141,6 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-        # If match ended, switch to PostMatchView.
         if not self.match.in_progress:
             view = PostMatchView(self.match, self.lock)
         else:
@@ -178,7 +177,6 @@ class FightView(discord.ui.View):
                 await self.update_message(interaction)
                 return
 
-            # Check if bot is defeated.
             if self.match.bot_hp <= 0:
                 commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
@@ -187,14 +185,13 @@ class FightView(discord.ui.View):
                 await self.update_message(interaction)
                 return
 
-            # Bot's turn
+            # Bot's turn.
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
                 commentary += f"\nThe bot tried a **{bot_move}** but missed!"
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
 
-            # Check if player is defeated.
             if self.match.player_hp <= 0:
                 commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
@@ -227,7 +224,6 @@ class FightView(discord.ui.View):
     @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.danger, row=2)
     async def forfeit(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.process_player_move(interaction, "forfeit")
-
 
 class PostMatchView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
@@ -266,7 +262,7 @@ class PostMatchView(discord.ui.View):
 # -------------------------
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
-    """Publicly available. Anyone can use this command."""
+    """This command is available to everyone."""
     user = interaction.user
     lock = get_user_lock(user.id)
     async with lock:
@@ -279,26 +275,35 @@ async def startfight(interaction: discord.Interaction):
         embed = match.to_embed()
         await interaction.response.send_message(embed=embed, view=view)
 
-
 @bot.tree.command(name="setactivity", description="Set the bot's activity status.")
 async def setactivity(interaction: discord.Interaction, status: str):
-    """
-    Public command. Anyone can change the bot's activity.
-    If you want this restricted, add @app_commands.check(owner_only).
-    """
+    """This command is available to everyone. If you wish to restrict it, add a check decorator."""
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
-
 
 @bot.tree.command(name="listservers", description="List all servers the bot is in (Owner only)")
 @app_commands.check(owner_only)
 async def listservers(interaction: discord.Interaction):
-    guild_list = "\n".join([f"{guild.name} (ID: {guild.id})" for guild in bot.guilds])
+    guild_data = []
+    for guild in bot.guilds:
+        # Try to get an invite link from the first text channel where the bot has permission.
+        invite_link = "No invite available"
+        for channel in guild.text_channels:
+            perms = channel.permissions_for(guild.me)
+            if perms.create_instant_invite:
+                try:
+                    invite = await channel.create_invite(max_age=0, max_uses=0, unique=False)
+                    invite_link = invite.url
+                    break
+                except Exception:
+                    continue
+        guild_data.append(f"**{guild.name}** (ID: {guild.id})\nMembers: {guild.member_count}\nInvite: {invite_link}")
+    
+    guild_list = "\n\n".join(guild_data)
     if not guild_list:
         guild_list = "The bot is not in any servers."
     embed = discord.Embed(title="Server List", description=guild_list, color=discord.Color.green())
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 # -------------------------
 # Error Handling
@@ -316,7 +321,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
         except Exception:
             pass
 
-
 # -------------------------
 # Bot Startup
 # -------------------------
@@ -329,5 +333,4 @@ async def on_ready():
         print(f"Failed to sync commands: {e}")
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-
-bot.run(BOT_TOKEN)
+bot.run(os.getenv("BOT_TOKEN"))
