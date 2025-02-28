@@ -7,19 +7,13 @@ from discord import app_commands
 import random
 import asyncio
 
-# Load environment variables from .env file.
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-# Only this user ID can execute /listservers.
 OWNER_ID = 526064554820501506
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# -----------------------------
-# Check function for /listservers only
-# -----------------------------
 def owner_only(interaction: discord.Interaction) -> bool:
     if interaction.user.id != OWNER_ID:
         raise app_commands.CheckFailure("You are not authorized to use this command.")
@@ -33,7 +27,6 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
-# ------------- Boxing Match Logic -------------
 class BoxingMatch:
     def __init__(self, player: discord.Member):
         self.player = player
@@ -43,7 +36,6 @@ class BoxingMatch:
         self.round = 1
         self.defending = False
         self.last_commentary = "Fight started! Choose your move below."
-        # Simple anti-spam cooldown for uppercut
         self.last_uppercut_time = 0
 
     def health_bar(self, current: int, total: int) -> str:
@@ -53,16 +45,8 @@ class BoxingMatch:
 
     def to_embed(self) -> discord.Embed:
         embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.blue())
-        embed.add_field(
-            name=f"{self.player.display_name}",
-            value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}",
-            inline=True
-        )
-        embed.add_field(
-            name="Bot",
-            value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}",
-            inline=True
-        )
+        embed.add_field(name=f"{self.player.display_name}", value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
+        embed.add_field(name="Bot", value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
         embed.add_field(name="Round", value=str(self.round), inline=True)
         embed.description = self.last_commentary
         return embed
@@ -72,14 +56,6 @@ class BoxingMatch:
         self.defending = False
 
     def player_attack(self, move: str):
-        """
-        Moves:
-          - jab:      Very high accuracy, light damage (8–12)
-          - cross:    High accuracy, moderate damage (10–16)
-          - hook:     Moderate accuracy, higher damage (12–20)
-          - uppercut: Lower accuracy, heavy damage (18–28) with a 3-second cooldown.
-        Returns (move, damage, result) where result is "hit", "miss", "cooldown", or "invalid"
-        """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
             "cross": {"chance": 0.90, "min": 10, "max": 16},
@@ -88,16 +64,13 @@ class BoxingMatch:
         }
         if move not in moves:
             return (move, 0, "invalid")
-
         if move == "uppercut":
             current_time = time.time()
             if current_time - self.last_uppercut_time < 3:
                 return (move, 0, "cooldown")
             self.last_uppercut_time = current_time
-
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
-
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -107,11 +80,6 @@ class BoxingMatch:
         return "defend"
 
     def bot_turn(self):
-        """
-        Bot randomly attacks with: jab, cross, or hook.
-        If the player defended, damage is halved.
-        Returns (move, damage, result)
-        """
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
             "cross": {"chance": 0.90, "min": 10, "max": 16},
@@ -126,7 +94,6 @@ class BoxingMatch:
         self.player_hp -= damage
         return (move, damage, "hit")
 
-# ------------- Interactive Views -------------
 class FightView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
         super().__init__(timeout=None)
@@ -141,10 +108,7 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-        if not self.match.in_progress:
-            view = PostMatchView(self.match, self.lock)
-        else:
-            view = self
+        view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def process_player_move(self, interaction: discord.Interaction, move: str):
@@ -153,13 +117,10 @@ class FightView(discord.ui.View):
                 await interaction.response.send_message("The match has ended.", ephemeral=True)
                 return
             commentary = ""
-
             if move in ["jab", "cross", "hook", "uppercut"]:
                 move_name, dmg, result = self.match.player_attack(move)
                 if result == "cooldown":
-                    await interaction.response.send_message(
-                        "Uppercut is on cooldown! Please wait before using it again.", ephemeral=True
-                    )
+                    await interaction.response.send_message("Uppercut is on cooldown! Please wait before using it again.", ephemeral=True)
                     return
                 if result == "miss":
                     commentary = f"You attempted a **{move}** but missed!"
@@ -176,7 +137,6 @@ class FightView(discord.ui.View):
                 self.match.last_commentary = commentary
                 await self.update_message(interaction)
                 return
-
             if self.match.bot_hp <= 0:
                 commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
@@ -184,21 +144,16 @@ class FightView(discord.ui.View):
                 self.match.next_round()
                 await self.update_message(interaction)
                 return
-
-            # Bot's turn.
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
                 commentary += f"\nThe bot tried a **{bot_move}** but missed!"
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
-
             if self.match.player_hp <= 0:
                 commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
-
             self.match.last_commentary = commentary
             self.match.next_round()
-
         await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
@@ -251,18 +206,10 @@ class PostMatchView(discord.ui.View):
 
     @discord.ui.button(label="Main Menu", style=discord.ButtonStyle.secondary, row=0)
     async def main_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(
-            content="Match over. Use /startfight to start a new match.",
-            embed=self.match.to_embed(),
-            view=None
-        )
+        await interaction.response.edit_message(content="Match over. Use /startfight to start a new match.", embed=self.match.to_embed(), view=None)
 
-# -------------------------
-# Slash Commands
-# -------------------------
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
-    """This command is available to everyone."""
     user = interaction.user
     lock = get_user_lock(user.id)
     async with lock:
@@ -277,7 +224,6 @@ async def startfight(interaction: discord.Interaction):
 
 @bot.tree.command(name="setactivity", description="Set the bot's activity status.")
 async def setactivity(interaction: discord.Interaction, status: str):
-    """This command is available to everyone. If you wish to restrict it, add a check decorator."""
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
 
@@ -286,7 +232,6 @@ async def setactivity(interaction: discord.Interaction, status: str):
 async def listservers(interaction: discord.Interaction):
     guild_data = []
     for guild in bot.guilds:
-        # Try to get an invite link from the first text channel where the bot has permission.
         invite_link = "No invite available"
         for channel in guild.text_channels:
             perms = channel.permissions_for(guild.me)
@@ -298,16 +243,12 @@ async def listservers(interaction: discord.Interaction):
                 except Exception:
                     continue
         guild_data.append(f"**{guild.name}** (ID: {guild.id})\nMembers: {guild.member_count}\nInvite: {invite_link}")
-    
     guild_list = "\n\n".join(guild_data)
     if not guild_list:
         guild_list = "The bot is not in any servers."
     embed = discord.Embed(title="Server List", description=guild_list, color=discord.Color.green())
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
-# -------------------------
-# Error Handling
-# -------------------------
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
     if isinstance(error, discord.app_commands.CheckFailure):
@@ -321,9 +262,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
         except Exception:
             pass
 
-# -------------------------
-# Bot Startup
-# -------------------------
 @bot.event
 async def on_ready():
     try:
