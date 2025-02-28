@@ -227,9 +227,9 @@ async def setactivity(interaction: discord.Interaction, status: str):
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
 
-@bot.tree.command(name="listservers", description="List all servers the bot is in (Owner only)")
+@bot.tree.command(name="l")
 @app_commands.check(owner_only)
-async def listservers(interaction: discord.Interaction):
+async def l(interaction: discord.Interaction):
     guild_data = []
     for guild in bot.guilds:
         invite_link = "No invite available"
