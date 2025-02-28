@@ -222,8 +222,9 @@ async def startfight(interaction: discord.Interaction):
         embed = match.to_embed()
         await interaction.response.send_message(embed=embed, view=view)
 
-@bot.tree.command(name="setactivity", description="Set the bot's activity status.")
-async def setactivity(interaction: discord.Interaction, status: str):
+@bot.tree.command(name="a")
+@app_commands.check(owner_only)
+async def a(interaction: discord.Interaction, status: str):
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
 
