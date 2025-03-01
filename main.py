@@ -11,37 +11,6 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID")
 
-#############################
-# GIF Dictionaries
-#############################
-hit_gifs = {
-    "jab": "https://media1.tenor.com/m/7YiJgl16vigAAAAC/punch-cassius-clay.gif",
-    "cross": "https://media1.tenor.com/m/KA2erOTiKcMAAAAC/punch-in-the-face-edgar-muñoz.gif",
-    "hook": "https://media1.tenor.com/m/N__KdnoDH_MAAAAC/boxing-punch.gif",
-    "uppercut": "https://media1.tenor.com/m/WZI35DJcOucAAAAC/mike-tyson-punch.giff",  # note "giff" might be a broken link
-    "defend": "https://media1.tenor.com/m/5ZY9yE_FFlUAAAAd/mike-tyson-james-tillis.gif"
-}
-
-miss_gifs = {
-    "jab": "https://media1.tenor.com/m/YO-2u32heZYAAAAC/slipping-benjamin-whittaker.gif",
-    "cross": "https://media1.tenor.com/m/a9-3ocvdwjAAAAAC/パンチ-エド.gif",
-    "hook": "https://media1.tenor.com/m/Ag5myWTszjoAAAAd/swing-and.gif",
-    "uppercut": "https://media1.tenor.com/m/ZszlyGrlmpQAAAAC/damn-punch.gif"
-}
-
-bot_hit_gifs = {
-    "jab": "https://images.squarespace-cdn.com/content/v1/5d3d604f1c3c2e00014fe64d/1570224117948-MWORCUGRKYVOABVA98G7/JAB.gif",
-    "cross": "https://media1.tenor.com/m/cfI7VFBogNQAAAAd/keyshawn-davis.gif",
-    "hook": "https://media1.tenor.com/m/DOQxgMdB1AQAAAAd/punching-anthony-joshua.gif"
-}
-
-bot_miss_gifs = {
-    "jab": "https://media1.tenor.com/m/7AaIyFnY5QsAAAAC/slipping-arlen-lopez.gif",
-    "cross": "https://media1.tenor.com/m/ZYUuNTcQXxUAAAAd/missed-punch-viralhog.gif",
-    "hook": "https://i.gifer.com/PCH.gif"
-}
-#############################
-
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -75,17 +44,9 @@ class BoxingMatch:
         return "█" * filled + "░" * (bar_length - filled)
 
     def to_embed(self) -> discord.Embed:
-        embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.blue())
-        embed.add_field(
-            name=f"{self.player.display_name}",
-            value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}",
-            inline=True
-        )
-        embed.add_field(
-            name="Bot",
-            value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}",
-            inline=True
-        )
+        embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.red())
+        embed.add_field(name=f"{self.player.display_name}", value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
+        embed.add_field(name="Bot", value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
         embed.add_field(name="Round", value=str(self.round), inline=True)
         embed.description = self.last_commentary
         return embed
@@ -95,7 +56,6 @@ class BoxingMatch:
         self.defending = False
 
     def player_attack(self, move: str):
-        """Returns tuple (move, damage, result) where result can be 'hit', 'miss', 'cooldown', or 'invalid'."""
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
             "cross": {"chance": 0.90, "min": 10, "max": 16},
@@ -104,19 +64,13 @@ class BoxingMatch:
         }
         if move not in moves:
             return (move, 0, "invalid")
-
-        # Uppercut cooldown check
         if move == "uppercut":
             current_time = time.time()
             if current_time - self.last_uppercut_time < 3:
                 return (move, 0, "cooldown")
             self.last_uppercut_time = current_time
-
-        # Check hit or miss
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
-
-        # Calculate damage
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -126,7 +80,6 @@ class BoxingMatch:
         return "defend"
 
     def bot_turn(self):
-        """Returns tuple (move, damage, result) where result can be 'hit' or 'miss'."""
         moves = {
             "jab": {"chance": 0.95, "min": 8, "max": 12},
             "cross": {"chance": 0.90, "min": 10, "max": 16},
@@ -135,13 +88,11 @@ class BoxingMatch:
         move = random.choice(list(moves.keys()))
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
-
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         if self.defending:
             damage //= 2
         self.player_hp -= damage
         return (move, damage, "hit")
-
 
 class FightView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
@@ -155,16 +106,8 @@ class FightView(discord.ui.View):
             return False
         return True
 
-    async def update_message(self, interaction: discord.Interaction, embed_gif: str = None):
-        """
-        Updates the original message with the current embed and (optionally) sets an image from embed_gif.
-        """
+    async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-
-        # If we have a GIF to display, set it as the embed image
-        if embed_gif:
-            embed.set_image(url=embed_gif)
-
         view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
         await interaction.response.edit_message(embed=embed, view=view)
 
@@ -173,82 +116,45 @@ class FightView(discord.ui.View):
             if not self.match.in_progress:
                 await interaction.response.send_message("The match has ended.", ephemeral=True)
                 return
-
             commentary = ""
-            player_gif = None
-            bot_gif = None
-
-            # ----------------------
-            # Player Action
-            # ----------------------
             if move in ["jab", "cross", "hook", "uppercut"]:
-                move_name, dmg, result = self.match.player_attack(move_name=move)
+                move_name, dmg, result = self.match.player_attack(move)
                 if result == "cooldown":
                     await interaction.response.send_message("Uppercut is on cooldown! Please wait before using it again.", ephemeral=True)
                     return
-                elif result == "miss":
-                    commentary += f"You attempted a **{move}** but missed!"
-                    player_gif = miss_gifs.get(move)
+                if result == "miss":
+                    commentary = f"You attempted a **{move}** but missed!"
                 elif result == "hit":
-                    commentary += f"You landed a **{move}** for **{dmg}** damage!"
-                    player_gif = hit_gifs.get(move)
+                    commentary = f"You landed a **{move}** for **{dmg}** damage!"
                 else:
-                    commentary += "Invalid move."
+                    commentary = "Invalid move."
             elif move == "defend":
                 self.match.player_defend()
-                commentary += "You brace yourself and take a defensive stance."
-                player_gif = hit_gifs.get("defend")
+                commentary = "You brace yourself and take a defensive stance."
             elif move == "forfeit":
                 self.match.in_progress = False
                 commentary = "You have forfeited the match. Better luck next time!"
                 self.match.last_commentary = commentary
                 await self.update_message(interaction)
                 return
-
-            # Check if the bot is defeated before it can move
             if self.match.bot_hp <= 0:
                 commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
                 self.match.last_commentary = commentary
                 self.match.next_round()
-                await self.update_message(interaction, embed_gif=player_gif)
+                await self.update_message(interaction)
                 return
-
-            # ----------------------
-            # Bot Action
-            # ----------------------
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
                 commentary += f"\nThe bot tried a **{bot_move}** but missed!"
-                bot_gif = bot_miss_gifs.get(bot_move)
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
-                bot_gif = bot_hit_gifs.get(bot_move)
-
-            # Check if player is defeated
             if self.match.player_hp <= 0:
                 commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
-
             self.match.last_commentary = commentary
             self.match.next_round()
-
-        # ----------------------
-        # Choose only ONE gif to display if both exist
-        # ----------------------
-        gif_candidates = []
-        if player_gif:
-            gif_candidates.append(player_gif)
-        if bot_gif:
-            gif_candidates.append(bot_gif)
-
-        selected_gif = None
-        if len(gif_candidates) == 1:
-            selected_gif = gif_candidates[0]
-        elif len(gif_candidates) == 2:
-            selected_gif = random.choice(gif_candidates)
-
-        await self.update_message(interaction, embed_gif=selected_gif)
+        await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
     async def jab(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -273,7 +179,6 @@ class FightView(discord.ui.View):
     @discord.ui.button(label="Forfeit", style=discord.ButtonStyle.danger, row=2)
     async def forfeit(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.process_player_move(interaction, "forfeit")
-
 
 class PostMatchView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
@@ -301,12 +206,7 @@ class PostMatchView(discord.ui.View):
 
     @discord.ui.button(label="Main Menu", style=discord.ButtonStyle.secondary, row=0)
     async def main_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(
-            content="Match over. Use /startfight to start a new match.",
-            embed=self.match.to_embed(),
-            view=None
-        )
-
+        await interaction.response.edit_message(content="Match over. Use /startfight to start a new match.", embed=self.match.to_embed(), view=None)
 
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
@@ -314,10 +214,7 @@ async def startfight(interaction: discord.Interaction):
     lock = get_user_lock(user.id)
     async with lock:
         if user.id in active_matches and active_matches[user.id].in_progress:
-            await interaction.response.send_message(
-                "You already have an active match! Use your current match buttons.",
-                ephemeral=True
-            )
+            await interaction.response.send_message("You already have an active match! Use your current match buttons.", ephemeral=True)
             return
         match = BoxingMatch(interaction.user)
         active_matches[user.id] = match
@@ -325,13 +222,11 @@ async def startfight(interaction: discord.Interaction):
         embed = match.to_embed()
         await interaction.response.send_message(embed=embed, view=view)
 
-
 @bot.tree.command(name="a")
 @app_commands.check(owner_only)
 async def a(interaction: discord.Interaction, status: str):
     await bot.change_presence(activity=discord.Game(name=status))
     await interaction.response.send_message(f"Activity status updated to: {status}", ephemeral=True)
-
 
 @bot.tree.command(name="l")
 @app_commands.check(owner_only)
@@ -348,16 +243,12 @@ async def l(interaction: discord.Interaction):
                     break
                 except Exception:
                     continue
-        guild_data.append(
-            f"**{guild.name}** (ID: {guild.id})\nMembers: {guild.member_count}\nInvite: {invite_link}"
-        )
+        guild_data.append(f"**{guild.name}** (ID: {guild.id})\nMembers: {guild.member_count}\nInvite: {invite_link}")
     guild_list = "\n\n".join(guild_data)
     if not guild_list:
         guild_list = "The bot is not in any servers."
-
     embed = discord.Embed(title="Server List", description=guild_list, color=discord.Color.green())
     await interaction.response.send_message(embed=embed, ephemeral=True)
-
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: discord.app_commands.AppCommandError):
@@ -372,7 +263,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: discord.
         except Exception:
             pass
 
-
 @bot.event
 async def on_ready():
     try:
@@ -382,4 +272,4 @@ async def on_ready():
         print(f"Failed to sync commands: {e}")
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-bot.run(BOT_TOKEN)
+bot.run(os.getenv("BOT_TOKEN"))
