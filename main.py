@@ -9,7 +9,7 @@ import asyncio
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = 526064554820501506
+OWNER_ID = os.getenv("OWNER_ID")
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
