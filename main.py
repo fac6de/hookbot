@@ -9,7 +9,7 @@ import asyncio
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = 526064554820501506
+OWNER_ID = os.getenv("OWNER_ID)
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -27,6 +27,20 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
+attack_gifs = [
+    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
+    "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif"
+]
+miss_gifs = [
+    "https://media.giphy.com/media/26BRuo6sLetdllPAQ/giphy.gif"
+]
+win_gifs = [
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
+]
+lose_gifs = [
+    "https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif"
+]
+
 class BoxingMatch:
     def __init__(self, player: discord.Member):
         self.player = player
@@ -37,6 +51,7 @@ class BoxingMatch:
         self.defending = False
         self.last_commentary = "Fight started! Choose your move below."
         self.last_uppercut_time = 0
+        self.gif_url = None
 
     def health_bar(self, current: int, total: int) -> str:
         bar_length = 20
@@ -45,10 +60,14 @@ class BoxingMatch:
 
     def to_embed(self) -> discord.Embed:
         embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.blue())
-        embed.add_field(name=f"{self.player.display_name}", value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
-        embed.add_field(name="Bot", value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
+        embed.add_field(name=f"{self.player.display_name}", 
+                        value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
+        embed.add_field(name="Bot", 
+                        value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
         embed.add_field(name="Round", value=str(self.round), inline=True)
         embed.description = self.last_commentary
+        if self.gif_url:
+            embed.set_image(url=self.gif_url)
         return embed
 
     def next_round(self):
@@ -57,10 +76,10 @@ class BoxingMatch:
 
     def player_attack(self, move: str):
         moves = {
-            "jab": {"chance": 0.95, "min": 8, "max": 12},
-            "cross": {"chance": 0.90, "min": 10, "max": 16},
-            "hook": {"chance": 0.85, "min": 12, "max": 20},
-            "uppercut": {"chance": 0.75, "min": 18, "max": 28}
+            "jab": {"chance": 0.90, "min": 8, "max": 10},
+            "cross": {"chance": 0.85, "min": 9, "max": 14},
+            "hook": {"chance": 0.80, "min": 10, "max": 15},
+            "uppercut": {"chance": 0.70, "min": 15, "max": 20}
         }
         if move not in moves:
             return (move, 0, "invalid")
@@ -81,9 +100,9 @@ class BoxingMatch:
 
     def bot_turn(self):
         moves = {
-            "jab": {"chance": 0.95, "min": 8, "max": 12},
-            "cross": {"chance": 0.90, "min": 10, "max": 16},
-            "hook": {"chance": 0.85, "min": 12, "max": 20}
+            "jab": {"chance": 0.95, "min": 10, "max": 15},
+            "cross": {"chance": 0.90, "min": 12, "max": 18},
+            "hook": {"chance": 0.85, "min": 14, "max": 22}
         }
         move = random.choice(list(moves.keys()))
         if random.random() > moves[move]["chance"]:
@@ -154,6 +173,20 @@ class FightView(discord.ui.View):
                 self.match.in_progress = False
             self.match.last_commentary = commentary
             self.match.next_round()
+            
+            # Set GIF based on outcome
+            if not self.match.in_progress:
+                if self.match.bot_hp <= 0:
+                    self.match.gif_url = random.choice(win_gifs)
+                elif self.match.player_hp <= 0:
+                    self.match.gif_url = random.choice(lose_gifs)
+            else:
+                if "landed" in commentary:
+                    self.match.gif_url = random.choice(attack_gifs)
+                elif "miss" in commentary:
+                    self.match.gif_url = random.choice(miss_gifs)
+                else:
+                    self.match.gif_url = random.choice(attack_gifs)
         await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
