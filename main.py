@@ -224,7 +224,7 @@ class FightView(discord.ui.View):
                 self.match.gif_url = bot_hit_gifs.get(bot_move)
 
             if self.match.player_hp <= 0:
-                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
+                commentary += "\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
 
             self.match.last_commentary = commentary
