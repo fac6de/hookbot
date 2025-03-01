@@ -78,6 +78,7 @@ class BoxingMatch:
                 title = "Match Ended"
         else:
             title = "🥊 Boxing Match 🥊"
+
         embed = discord.Embed(title=title, color=discord.Color.red())
         embed.add_field(
             name=f"{self.player.display_name}",
@@ -115,6 +116,7 @@ class BoxingMatch:
             self.last_uppercut_time = current_time
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
+
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -132,6 +134,7 @@ class BoxingMatch:
         move = random.choice(list(moves.keys()))
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
+
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         if self.defending:
             damage //= 2
@@ -168,9 +171,8 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-        view = PostMatchView(self.match, self.lock)
-        if self.match.in_progress:
-            view = self
+        # If the match ended, swap to PostMatchView; else keep FightView
+        view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
         if not self.message:
             self.message = await interaction.original_response()
         await interaction.response.edit_message(embed=embed, view=view)
@@ -180,6 +182,7 @@ class FightView(discord.ui.View):
             if not self.match.in_progress:
                 await interaction.response.send_message("The match has ended.", ephemeral=True)
                 return
+
             commentary = ""
             if move in ["jab", "cross", "hook", "uppercut"]:
                 move_name, dmg, result = self.match.player_attack(move)
@@ -288,30 +291,51 @@ class PostMatchView(discord.ui.View):
 
     @discord.ui.button(label="Rematch", style=discord.ButtonStyle.success, row=0)
     async def rematch(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         async with self.lock:
             new_match = BoxingMatch(self.match.player)
             new_match.gif_url = None
             active_matches[self.match.player.id] = new_match
             new_view = FightView(new_match, self.lock)
-        await self.update_message(interaction, new_view)
+        # Defer was called, so we must use followup to edit
+        embed = new_match.to_embed()
+        if not self.message:
+            self.message = await interaction.original_response()
+        await interaction.followup.edit_message(
+            self.message.id,
+            embed=embed,
+            view=new_view
+        )
 
     @discord.ui.button(label="Main Menu", style=discord.ButtonStyle.secondary, row=0)
     async def main_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(
+        await interaction.response.defer()
+        if self.match.player.id in active_matches:
+            del active_matches[self.match.player.id]
+        embed = self.match.to_embed()
+        if not self.message:
+            self.message = await interaction.original_response()
+        await interaction.followup.edit_message(
+            self.message.id,
             content="Match over. Use /startfight to start a new match.",
-            embed=self.match.to_embed(),
+            embed=embed,
             view=None
         )
 
     @discord.ui.button(label="Done", style=discord.ButtonStyle.danger, row=1)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
         if self.match.player.id in active_matches:
             del active_matches[self.match.player.id]
-        await interaction.response.edit_message(
+        if not self.message:
+            self.message = await interaction.original_response()
+        await interaction.followup.edit_message(
+            self.message.id,
             content="Done. Thanks for playing!",
             embed=None,
             view=None
         )
+        self.stop()
 
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
