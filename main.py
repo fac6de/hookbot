@@ -189,16 +189,16 @@ class FightView(discord.ui.View):
                     )
                     return
                 if result == "miss":
-                    commentary = f"You attempted a **{move}** but missed!"
+                    commentary = f"﹒You attempted a **{move}** but missed!"
                     self.match.gif_url = miss_gifs.get(move)
                 elif result == "hit":
-                    commentary = f"You landed a **{move}** for **{dmg}** damage!"
+                    commentary = f"﹒You landed a **{move}** for **{dmg}** damage!"
                     self.match.gif_url = hit_gifs.get(move)
                 else:
                     commentary = "Invalid move."
             elif move == "defend":
                 self.match.player_defend()
-                commentary = "You brace yourself and take a defensive stance."
+                commentary = "﹒You brace yourself and take a defensive stance."
                 self.match.gif_url = hit_gifs.get("defend")
             elif move == "forfeit":
                 self.match.in_progress = False
@@ -217,14 +217,14 @@ class FightView(discord.ui.View):
 
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
-                commentary += f"\nThe bot tried a **{bot_move}** but missed!"
+                commentary += f"\n﹒The bot tried a **{bot_move}** but missed!"
                 self.match.gif_url = bot_miss_gifs.get(bot_move)
             elif bot_result == "hit":
-                commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
+                commentary += f"\n﹒The bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
                 self.match.gif_url = bot_hit_gifs.get(bot_move)
 
             if self.match.player_hp <= 0:
-                commentary += "\n💥 You have been knocked out by the bot. You lose. 💥"
+                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
 
             self.match.last_commentary = commentary
