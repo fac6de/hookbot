@@ -71,9 +71,9 @@ class BoxingMatch:
     def to_embed(self) -> discord.Embed:
         if not self.in_progress:
             if self.bot_hp <= 0 and self.player_hp > 0:
-                title = "You Won!"
+                title = "__You Won!__"
             elif self.player_hp <= 0:
-                title = "You Lost!"
+                title = "__You Lost!__"
             else:
                 title = "Match Ended"
         else:
