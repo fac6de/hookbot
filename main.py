@@ -34,20 +34,17 @@ hit_gifs = {
     "uppercut": "https://media1.tenor.com/m/WZI35DJcOucAAAAC/mike-tyson-punch.giff",
     "defend": "https://media1.tenor.com/m/5ZY9yE_FFlUAAAAd/mike-tyson-james-tillis.gif"
 }
-
 miss_gifs = {
     "jab": "https://media1.tenor.com/m/YO-2u32heZYAAAAC/slipping-benjamin-whittaker.gif",
     "cross": "https://media1.tenor.com/m/a9-3ocvdwjAAAAAC/パンチ-エド.gif",
     "hook": "https://media1.tenor.com/m/Ag5myWTszjoAAAAd/swing-and.gif",
     "uppercut": "https://media1.tenor.com/m/ZszlyGrlmpQAAAAC/damn-punch.gif"
 }
-
 bot_hit_gifs = {
     "jab": "https://images.squarespace-cdn.com/content/v1/5d3d604f1c3c2e00014fe64d/1570224117948-MWORCUGRKYVOABVA98G7/JAB.gif",
     "cross": "https://media1.tenor.com/m/cfI7VFBogNQAAAAd/keyshawn-davis.gif",
     "hook": "https://media1.tenor.com/m/DOQxgMdB1AQAAAAd/punching-anthony-joshua.gif"
 }
-
 bot_miss_gifs = {
     "jab": "https://media1.tenor.com/m/7AaIyFnY5QsAAAAC/slipping-arlen-lopez.gif",
     "cross": "https://media1.tenor.com/m/ZYUuNTcQXxUAAAAd/missed-punch-viralhog.gif",
@@ -73,7 +70,6 @@ class BoxingMatch:
 
     def to_embed(self) -> discord.Embed:
         if not self.in_progress:
-            # Show a different title depending on who won
             if self.bot_hp <= 0 and self.player_hp > 0:
                 title = "You Won!"
             elif self.player_hp <= 0:
@@ -82,7 +78,6 @@ class BoxingMatch:
                 title = "Match Ended"
         else:
             title = "Boxing Match"
-
         embed = discord.Embed(title=title, color=discord.Color.blue())
         embed.add_field(
             name=f"{self.player.display_name}",
@@ -118,10 +113,8 @@ class BoxingMatch:
             if current_time - self.last_uppercut_time < 3:
                 return (move, 0, "cooldown")
             self.last_uppercut_time = current_time
-
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
-
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -139,7 +132,6 @@ class BoxingMatch:
         move = random.choice(list(moves.keys()))
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
-
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         if self.defending:
             damage //= 2
@@ -148,9 +140,25 @@ class BoxingMatch:
 
 class FightView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
-        super().__init__(timeout=None)
+        super().__init__(timeout=300)
         self.match = match
         self.lock = lock
+        self.message = None
+
+    async def on_timeout(self):
+        if self.match.in_progress:
+            self.match.in_progress = False
+            self.match.last_commentary = "This match ended due to inactivity."
+            if self.match.player.id in active_matches:
+                del active_matches[self.match.player.id]
+            if self.message:
+                embed = self.match.to_embed()
+                await self.message.edit(
+                    content="Match ended due to inactivity.",
+                    embed=embed,
+                    view=None
+                )
+        self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.match.player.id:
@@ -161,6 +169,8 @@ class FightView(discord.ui.View):
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
         view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
+        if not self.message:
+            self.message = await interaction.original_response()
         await interaction.response.edit_message(embed=embed, view=view)
 
     async def process_player_move(self, interaction: discord.Interaction, move: str):
@@ -198,7 +208,7 @@ class FightView(discord.ui.View):
                 return
 
             if self.match.bot_hp <= 0:
-                commentary += "\n\nYou knocked out the bot! You win!"
+                commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
                 self.match.last_commentary = commentary
                 self.match.next_round()
@@ -211,11 +221,10 @@ class FightView(discord.ui.View):
                 self.match.gif_url = bot_miss_gifs.get(bot_move)
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
-
                 self.match.gif_url = bot_hit_gifs.get(bot_move)
 
             if self.match.player_hp <= 0:
-                commentary += "\n\nYou have been knocked out by the bot. You lose."
+                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
 
             self.match.last_commentary = commentary
@@ -249,9 +258,21 @@ class FightView(discord.ui.View):
 
 class PostMatchView(discord.ui.View):
     def __init__(self, match: BoxingMatch, lock: asyncio.Lock):
-        super().__init__(timeout=None)
+        super().__init__(timeout=300)
         self.match = match
         self.lock = lock
+        self.message = None
+
+    async def on_timeout(self):
+        if self.match.player.id in active_matches:
+            del active_matches[self.match.player.id]
+        if self.message:
+            await self.message.edit(
+                content="Match ended due to inactivity (post-match).",
+                embed=None,
+                view=None
+            )
+        self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.match.player.id:
@@ -260,6 +281,8 @@ class PostMatchView(discord.ui.View):
         return True
 
     async def update_message(self, interaction: discord.Interaction, new_view: discord.ui.View):
+        if not self.message:
+            self.message = await interaction.original_response()
         embed = self.match.to_embed()
         await interaction.response.edit_message(embed=embed, view=new_view)
 
@@ -291,8 +314,8 @@ async def startfight(interaction: discord.Interaction):
         match = BoxingMatch(interaction.user)
         active_matches[user.id] = match
         view = FightView(match, lock)
-        embed = match.to_embed()
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.response.send_message(embed=match.to_embed(), view=view)
+        view.message = await interaction.original_response()
 
 @bot.tree.command(name="a")
 @app_commands.check(owner_only)
@@ -344,4 +367,4 @@ async def on_ready():
         print(f"Failed to sync commands: {e}")
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-bot.run(os.getenv("BOT_TOKEN"))
+bot.run(BOT_TOKEN)
