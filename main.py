@@ -15,7 +15,7 @@ intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def owner_only(interaction: discord.Interaction) -> bool:
-    if interaction.user.id != OWNER_ID:
+    if interaction.user.id != int(OWNER_ID):
         raise app_commands.CheckFailure("You are not authorized to use this command.")
     return True
 
@@ -27,7 +27,6 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
-# GIF dictionaries for player's moves
 hit_gifs = {
     "jab": "https://media1.tenor.com/m/7YiJgl16vigAAAAC/punch-cassius-clay.gif",
     "cross": "https://media1.tenor.com/m/KA2erOTiKcMAAAAC/punch-in-the-face-edgar-muñoz.gif",
@@ -35,21 +34,17 @@ hit_gifs = {
     "uppercut": "https://media1.tenor.com/m/WZI35DJcOucAAAAC/mike-tyson-punch.giff",
     "defend": "https://media1.tenor.com/m/5ZY9yE_FFlUAAAAd/mike-tyson-james-tillis.gif"
 }
-
 miss_gifs = {
     "jab": "https://media1.tenor.com/m/YO-2u32heZYAAAAC/slipping-benjamin-whittaker.gif",
     "cross": "https://media1.tenor.com/m/a9-3ocvdwjAAAAAC/パンチ-エド.gif",
     "hook": "https://media1.tenor.com/m/Ag5myWTszjoAAAAd/swing-and.gif",
     "uppercut": "https://media1.tenor.com/m/ZszlyGrlmpQAAAAC/damn-punch.gif"
 }
-
-# GIF dictionaries for bot's moves
 bot_hit_gifs = {
     "jab": "https://images.squarespace-cdn.com/content/v1/5d3d604f1c3c2e00014fe64d/1570224117948-MWORCUGRKYVOABVA98G7/JAB.gif",
     "cross": "https://media1.tenor.com/m/cfI7VFBogNQAAAAd/keyshawn-davis.gif",
     "hook": "https://media1.tenor.com/m/DOQxgMdB1AQAAAAd/punching-anthony-joshua.gif"
 }
-
 bot_miss_gifs = {
     "jab": "https://media1.tenor.com/m/7AaIyFnY5QsAAAAC/slipping-arlen-lopez.gif",
     "cross": "https://media1.tenor.com/m/ZYUuNTcQXxUAAAAd/missed-punch-viralhog.gif",
@@ -74,13 +69,17 @@ class BoxingMatch:
         return "█" * filled + "░" * (bar_length - filled)
 
     def to_embed(self) -> discord.Embed:
-        embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.blue())
+        if not self.in_progress:
+            title = "🎉 **YOU WIN!** 🎉" if self.player_hp > 0 else "💥 **YOU LOSE!** 💥"
+        else:
+            title = "🥊 Boxing Match 🥊"
+        embed = discord.Embed(title=title, color=discord.Color.blue())
         embed.add_field(name=f"{self.player.display_name}",
                         value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
         embed.add_field(name="Bot",
                         value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
         embed.add_field(name="Round", value=str(self.round), inline=True)
-        embed.description = self.last_commentary
+        embed.description = f"**{self.last_commentary.upper()}**"
         if self.gif_url:
             embed.set_image(url=self.gif_url)
         return embed
@@ -242,13 +241,15 @@ class PostMatchView(discord.ui.View):
     async def rematch(self, interaction: discord.Interaction, button: discord.ui.Button):
         async with self.lock:
             new_match = BoxingMatch(self.match.player)
+            new_match.gif_url = None
             active_matches[self.match.player.id] = new_match
             new_view = FightView(new_match, self.lock)
         await self.update_message(interaction, new_view)
 
     @discord.ui.button(label="Main Menu", style=discord.ButtonStyle.secondary, row=0)
     async def main_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="Match over. Use /startfight to start a new match.", embed=self.match.to_embed(), view=None)
+        await interaction.response.edit_message(content="Match over. Use /startfight to start a new match.",
+                                                  embed=self.match.to_embed(), view=None)
 
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
