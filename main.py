@@ -77,8 +77,8 @@ class BoxingMatch:
             else:
                 title = "Match Ended"
         else:
-            title = "Boxing Match"
-        embed = discord.Embed(title=title, color=discord.Color.blue())
+            title = "🥊 Boxing Match 🥊"
+        embed = discord.Embed(title=title, color=discord.Color.red())
         embed.add_field(
             name=f"{self.player.display_name}",
             value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}",
