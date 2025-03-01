@@ -168,7 +168,9 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-        view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
+        view = PostMatchView(self.match, self.lock)
+        if self.match.in_progress:
+            view = self
         if not self.message:
             self.message = await interaction.original_response()
         await interaction.response.edit_message(embed=embed, view=view)
@@ -178,7 +180,6 @@ class FightView(discord.ui.View):
             if not self.match.in_progress:
                 await interaction.response.send_message("The match has ended.", ephemeral=True)
                 return
-
             commentary = ""
             if move in ["jab", "cross", "hook", "uppercut"]:
                 move_name, dmg, result = self.match.player_attack(move)
@@ -208,7 +209,7 @@ class FightView(discord.ui.View):
                 return
 
             if self.match.bot_hp <= 0:
-                commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
+                commentary += "\n\n🎉 You knocked out the bot! You win! 🎉\n"
                 self.match.in_progress = False
                 self.match.last_commentary = commentary
                 self.match.next_round()
@@ -224,12 +225,11 @@ class FightView(discord.ui.View):
                 self.match.gif_url = bot_hit_gifs.get(bot_move)
 
             if self.match.player_hp <= 0:
-                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
+                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥\n"
                 self.match.in_progress = False
 
             self.match.last_commentary = commentary
             self.match.next_round()
-
         await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
@@ -300,6 +300,16 @@ class PostMatchView(discord.ui.View):
         await interaction.response.edit_message(
             content="Match over. Use /startfight to start a new match.",
             embed=self.match.to_embed(),
+            view=None
+        )
+
+    @discord.ui.button(label="Done", style=discord.ButtonStyle.danger, row=1)
+    async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.match.player.id in active_matches:
+            del active_matches[self.match.player.id]
+        await interaction.response.edit_message(
+            content="Done. Thanks for playing!",
+            embed=None,
             view=None
         )
 
