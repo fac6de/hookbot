@@ -9,7 +9,7 @@ import asyncio
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OWNER_ID = os.getenv("OWNER_ID")
+OWNER_ID = 526064554820501506
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -27,19 +27,34 @@ def get_user_lock(user_id: int) -> asyncio.Lock:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
-attack_gifs = [
-    "https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif",
-    "https://media.giphy.com/media/l0HlNQ03J5JxX6lva/giphy.gif"
-]
-miss_gifs = [
-    "https://media.giphy.com/media/26BRuo6sLetdllPAQ/giphy.gif"
-]
-win_gifs = [
-    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif"
-]
-lose_gifs = [
-    "https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif"
-]
+# GIF dictionaries for player's moves
+hit_gifs = {
+    "jab": "https://media1.tenor.com/m/7YiJgl16vigAAAAC/punch-cassius-clay.gif",
+    "cross": "https://media1.tenor.com/m/KA2erOTiKcMAAAAC/punch-in-the-face-edgar-muñoz.gif",
+    "hook": "https://media1.tenor.com/m/N__KdnoDH_MAAAAC/boxing-punch.gif",
+    "uppercut": "https://media1.tenor.com/m/WZI35DJcOucAAAAC/mike-tyson-punch.giff",
+    "defend": "https://media1.tenor.com/m/5ZY9yE_FFlUAAAAd/mike-tyson-james-tillis.gif"
+}
+
+miss_gifs = {
+    "jab": "https://media1.tenor.com/m/YO-2u32heZYAAAAC/slipping-benjamin-whittaker.gif",
+    "cross": "https://media1.tenor.com/m/a9-3ocvdwjAAAAAC/パンチ-エド.gif",
+    "hook": "https://media1.tenor.com/m/Ag5myWTszjoAAAAd/swing-and.gif",
+    "uppercut": "https://media1.tenor.com/m/ZszlyGrlmpQAAAAC/damn-punch.gif"
+}
+
+# GIF dictionaries for bot's moves
+bot_hit_gifs = {
+    "jab": "https://images.squarespace-cdn.com/content/v1/5d3d604f1c3c2e00014fe64d/1570224117948-MWORCUGRKYVOABVA98G7/JAB.gif",
+    "cross": "https://media1.tenor.com/m/cfI7VFBogNQAAAAd/keyshawn-davis.gif",
+    "hook": "https://media1.tenor.com/m/DOQxgMdB1AQAAAAd/punching-anthony-joshua.gif"
+}
+
+bot_miss_gifs = {
+    "jab": "https://media1.tenor.com/m/7AaIyFnY5QsAAAAC/slipping-arlen-lopez.gif",
+    "cross": "https://media1.tenor.com/m/ZYUuNTcQXxUAAAAd/missed-punch-viralhog.gif",
+    "hook": "https://i.gifer.com/PCH.gif"
+}
 
 class BoxingMatch:
     def __init__(self, player: discord.Member):
@@ -60,9 +75,9 @@ class BoxingMatch:
 
     def to_embed(self) -> discord.Embed:
         embed = discord.Embed(title="🥊 Boxing Match 🥊", color=discord.Color.blue())
-        embed.add_field(name=f"{self.player.display_name}", 
+        embed.add_field(name=f"{self.player.display_name}",
                         value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
-        embed.add_field(name="Bot", 
+        embed.add_field(name="Bot",
                         value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
         embed.add_field(name="Round", value=str(self.round), inline=True)
         embed.description = self.last_commentary
@@ -143,19 +158,23 @@ class FightView(discord.ui.View):
                     return
                 if result == "miss":
                     commentary = f"You attempted a **{move}** but missed!"
+                    self.match.gif_url = miss_gifs.get(move)
                 elif result == "hit":
                     commentary = f"You landed a **{move}** for **{dmg}** damage!"
+                    self.match.gif_url = hit_gifs.get(move)
                 else:
                     commentary = "Invalid move."
             elif move == "defend":
                 self.match.player_defend()
                 commentary = "You brace yourself and take a defensive stance."
+                self.match.gif_url = hit_gifs.get("defend")
             elif move == "forfeit":
                 self.match.in_progress = False
                 commentary = "You have forfeited the match. Better luck next time!"
                 self.match.last_commentary = commentary
                 await self.update_message(interaction)
                 return
+
             if self.match.bot_hp <= 0:
                 commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
                 self.match.in_progress = False
@@ -163,30 +182,20 @@ class FightView(discord.ui.View):
                 self.match.next_round()
                 await self.update_message(interaction)
                 return
+
             bot_move, bot_dmg, bot_result = self.match.bot_turn()
             if bot_result == "miss":
                 commentary += f"\nThe bot tried a **{bot_move}** but missed!"
+                self.match.gif_url = bot_miss_gifs.get(bot_move)
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
+                self.match.gif_url = bot_hit_gifs.get(bot_move)
             if self.match.player_hp <= 0:
                 commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
                 self.match.in_progress = False
+
             self.match.last_commentary = commentary
             self.match.next_round()
-            
-            # Set GIF based on outcome
-            if not self.match.in_progress:
-                if self.match.bot_hp <= 0:
-                    self.match.gif_url = random.choice(win_gifs)
-                elif self.match.player_hp <= 0:
-                    self.match.gif_url = random.choice(lose_gifs)
-            else:
-                if "landed" in commentary:
-                    self.match.gif_url = random.choice(attack_gifs)
-                elif "miss" in commentary:
-                    self.match.gif_url = random.choice(miss_gifs)
-                else:
-                    self.match.gif_url = random.choice(attack_gifs)
         await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
