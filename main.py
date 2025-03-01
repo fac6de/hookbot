@@ -171,7 +171,6 @@ class FightView(discord.ui.View):
 
     async def update_message(self, interaction: discord.Interaction):
         embed = self.match.to_embed()
-        # If the match ended, swap to PostMatchView; else keep FightView
         view = PostMatchView(self.match, self.lock) if not self.match.in_progress else self
         if not self.message:
             self.message = await interaction.original_response()
@@ -297,10 +296,8 @@ class PostMatchView(discord.ui.View):
             new_match.gif_url = None
             active_matches[self.match.player.id] = new_match
             new_view = FightView(new_match, self.lock)
-        # Defer was called, so we must use followup to edit
+            new_view.message = self.message  # ensure new view has the same message reference
         embed = new_match.to_embed()
-        if not self.message:
-            self.message = await interaction.original_response()
         await interaction.followup.edit_message(
             self.message.id,
             embed=embed,
@@ -312,15 +309,15 @@ class PostMatchView(discord.ui.View):
         await interaction.response.defer()
         if self.match.player.id in active_matches:
             del active_matches[self.match.player.id]
-        embed = self.match.to_embed()
         if not self.message:
             self.message = await interaction.original_response()
         await interaction.followup.edit_message(
             self.message.id,
             content="Match over. Use /startfight to start a new match.",
-            embed=embed,
+            embed=None,
             view=None
         )
+        self.stop()
 
     @discord.ui.button(label="Done", style=discord.ButtonStyle.danger, row=1)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
