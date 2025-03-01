@@ -34,17 +34,20 @@ hit_gifs = {
     "uppercut": "https://media1.tenor.com/m/WZI35DJcOucAAAAC/mike-tyson-punch.giff",
     "defend": "https://media1.tenor.com/m/5ZY9yE_FFlUAAAAd/mike-tyson-james-tillis.gif"
 }
+
 miss_gifs = {
     "jab": "https://media1.tenor.com/m/YO-2u32heZYAAAAC/slipping-benjamin-whittaker.gif",
     "cross": "https://media1.tenor.com/m/a9-3ocvdwjAAAAAC/パンチ-エド.gif",
     "hook": "https://media1.tenor.com/m/Ag5myWTszjoAAAAd/swing-and.gif",
     "uppercut": "https://media1.tenor.com/m/ZszlyGrlmpQAAAAC/damn-punch.gif"
 }
+
 bot_hit_gifs = {
     "jab": "https://images.squarespace-cdn.com/content/v1/5d3d604f1c3c2e00014fe64d/1570224117948-MWORCUGRKYVOABVA98G7/JAB.gif",
     "cross": "https://media1.tenor.com/m/cfI7VFBogNQAAAAd/keyshawn-davis.gif",
     "hook": "https://media1.tenor.com/m/DOQxgMdB1AQAAAAd/punching-anthony-joshua.gif"
 }
+
 bot_miss_gifs = {
     "jab": "https://media1.tenor.com/m/7AaIyFnY5QsAAAAC/slipping-arlen-lopez.gif",
     "cross": "https://media1.tenor.com/m/ZYUuNTcQXxUAAAAd/missed-punch-viralhog.gif",
@@ -70,16 +73,29 @@ class BoxingMatch:
 
     def to_embed(self) -> discord.Embed:
         if not self.in_progress:
-            title = "🎉 **YOU WIN!** 🎉" if self.player_hp > 0 else "💥 **YOU LOSE!** 💥"
+            # Show a different title depending on who won
+            if self.bot_hp <= 0 and self.player_hp > 0:
+                title = "You Won!"
+            elif self.player_hp <= 0:
+                title = "You Lost!"
+            else:
+                title = "Match Ended"
         else:
-            title = "🥊 Boxing Match 🥊"
+            title = "Boxing Match"
+
         embed = discord.Embed(title=title, color=discord.Color.blue())
-        embed.add_field(name=f"{self.player.display_name}",
-                        value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}", inline=True)
-        embed.add_field(name="Bot",
-                        value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}", inline=True)
+        embed.add_field(
+            name=f"{self.player.display_name}",
+            value=f"HP: {max(self.player_hp, 0)}/100\n{self.health_bar(self.player_hp, 100)}",
+            inline=True
+        )
+        embed.add_field(
+            name="Bot",
+            value=f"HP: {max(self.bot_hp, 0)}/100\n{self.health_bar(self.bot_hp, 100)}",
+            inline=True
+        )
         embed.add_field(name="Round", value=str(self.round), inline=True)
-        embed.description = f"**{self.last_commentary.upper()}**"
+        embed.description = self.last_commentary
         if self.gif_url:
             embed.set_image(url=self.gif_url)
         return embed
@@ -102,8 +118,10 @@ class BoxingMatch:
             if current_time - self.last_uppercut_time < 3:
                 return (move, 0, "cooldown")
             self.last_uppercut_time = current_time
+
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
+
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         self.bot_hp -= damage
         return (move, damage, "hit")
@@ -121,6 +139,7 @@ class BoxingMatch:
         move = random.choice(list(moves.keys()))
         if random.random() > moves[move]["chance"]:
             return (move, 0, "miss")
+
         damage = random.randint(moves[move]["min"], moves[move]["max"])
         if self.defending:
             damage //= 2
@@ -149,11 +168,15 @@ class FightView(discord.ui.View):
             if not self.match.in_progress:
                 await interaction.response.send_message("The match has ended.", ephemeral=True)
                 return
+
             commentary = ""
             if move in ["jab", "cross", "hook", "uppercut"]:
                 move_name, dmg, result = self.match.player_attack(move)
                 if result == "cooldown":
-                    await interaction.response.send_message("Uppercut is on cooldown! Please wait before using it again.", ephemeral=True)
+                    await interaction.response.send_message(
+                        "Uppercut is on cooldown! Please wait before using it again.",
+                        ephemeral=True
+                    )
                     return
                 if result == "miss":
                     commentary = f"You attempted a **{move}** but missed!"
@@ -175,7 +198,7 @@ class FightView(discord.ui.View):
                 return
 
             if self.match.bot_hp <= 0:
-                commentary += "\n\n🎉 You knocked out the bot! You win! 🎉"
+                commentary += "\n\nYou knocked out the bot! You win!"
                 self.match.in_progress = False
                 self.match.last_commentary = commentary
                 self.match.next_round()
@@ -188,13 +211,16 @@ class FightView(discord.ui.View):
                 self.match.gif_url = bot_miss_gifs.get(bot_move)
             elif bot_result == "hit":
                 commentary += f"\nThe bot used **{bot_move}** and dealt **{bot_dmg}** damage to you!"
+
                 self.match.gif_url = bot_hit_gifs.get(bot_move)
+
             if self.match.player_hp <= 0:
-                commentary += "\n\n💥 You have been knocked out by the bot. You lose. 💥"
+                commentary += "\n\nYou have been knocked out by the bot. You lose."
                 self.match.in_progress = False
 
             self.match.last_commentary = commentary
             self.match.next_round()
+
         await self.update_message(interaction)
 
     @discord.ui.button(label="Jab", style=discord.ButtonStyle.primary, row=0)
@@ -248,8 +274,11 @@ class PostMatchView(discord.ui.View):
 
     @discord.ui.button(label="Main Menu", style=discord.ButtonStyle.secondary, row=0)
     async def main_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content="Match over. Use /startfight to start a new match.",
-                                                  embed=self.match.to_embed(), view=None)
+        await interaction.response.edit_message(
+            content="Match over. Use /startfight to start a new match.",
+            embed=self.match.to_embed(),
+            view=None
+        )
 
 @bot.tree.command(name="startfight", description="Begin a new boxing match against the bot!")
 async def startfight(interaction: discord.Interaction):
